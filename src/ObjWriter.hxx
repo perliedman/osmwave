@@ -2,7 +2,10 @@
 #define _OBJEWRITER_HXX_
 
 #include <ostream>
-#include <iterator>
+#include <vector>
+#include "vec3.hxx"
+
+using namespace std;
 
 namespace osmwave {
     class ObjWriter {
@@ -16,8 +19,7 @@ namespace osmwave {
 
         void material(const std::string& materialName);
 
-        template<class VertIterator, class FaceIterator> 
-        int write(VertIterator vertices, FaceIterator faces);
+        int write(vector<Vec3<double>>& vertices, vector<vector<int>>& faces);
     };
 }
 

@@ -20,8 +20,11 @@
 #include <osmium/handler.hpp>
 #include <osmium/visitor.hpp>
 #include <proj_api.h>
+#include "vec3.hxx"
+#include "ObjWriter.hxx"
 
 using namespace std;
+using namespace osmwave;
 
 typedef osmium::index::map::Map<osmium::unsigned_object_id_type, osmium::Location> index_type;
 typedef osmium::handler::NodeLocationsForWays<index_type> location_handler_type;
@@ -30,18 +33,37 @@ projPJ wgs84 = pj_init_plus("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs");
 
 class ObjHandler : public osmium::handler::Handler {
     projPJ proj;
+    ObjWriter writer;
+    vector<double> wayCoords;
+    vector<Vec3<double>> wayVerts;
 
 public:
-    ObjHandler(projPJ p) : proj(p) {}
+    ObjHandler(projPJ p, ObjWriter writer) : proj(p), writer(writer) {}
 
     void way(osmium::Way& way) {
-        for (auto& nr : way.nodes()) {
-            double y = nr.lat() * DEG_TO_RAD;
-            double x = nr.lon() * DEG_TO_RAD;
-            pj_transform(wgs84, this->proj, 1, 0, &x, &y, nullptr);
+        osmium::WayNodeList& nodes = way.nodes();
 
-            cout << x << ", " << y << "\n";
+        if (wayCoords.capacity() < nodes.size()) {
+            wayCoords.resize(nodes.size() * 2);
+            wayVerts.resize(nodes.size());
+            cout << "Resized buffers to " << nodes.size() << '\n';
         }
+
+        for (auto& nr : nodes) {
+            wayCoords.push_back(nr.lon() * DEG_TO_RAD);
+            wayCoords.push_back(nr.lat() * DEG_TO_RAD);
+        }
+
+        pj_transform(wgs84, proj, nodes.size(), 2, wayCoords.data(), wayCoords.data() + 1, nullptr);
+        for (vector<double>::iterator i = wayCoords.begin(); i != wayCoords.end(); i += 2) {
+            wayVerts.push_back(Vec3<double>(*i, *(i + 1), 0));
+        }
+
+        vector<vector<int>> faces = vector<vector<int>>();
+        writer.write(wayVerts, faces);
+
+        wayCoords.clear();
+        wayVerts.clear();
     }
 };
 
@@ -73,7 +95,7 @@ int main(int argc, char* argv[]) {
     location_handler_type location_handler(*index);
     location_handler.ignore_errors();
 
-    ObjHandler handler(proj);
+    ObjHandler handler(proj, ObjWriter(cout));
     osmium::apply(reader, location_handler, handler);
     reader.close();
 }

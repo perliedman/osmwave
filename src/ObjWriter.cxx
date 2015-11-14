@@ -1,5 +1,7 @@
 #include "ObjWriter.hxx"
 
+using namespace std;
+
 namespace osmwave {
     ObjWriter::ObjWriter(std::ostream& stream) : stream(stream), vertIndex(1) {
     }
@@ -12,17 +14,16 @@ namespace osmwave {
         this->stream << "mtl" << material << std::endl;
     }
 
-    template<class VertIterator, class FaceIterator> 
-    int ObjWriter::write(VertIterator vertices, FaceIterator faces) {
+    int ObjWriter::write(vector<Vec3<double>>& vertices, vector<vector<int>>& faces) {
         int startVertIndex = this->vertIndex;
-        for (auto v : vertices) {
+        for (auto& v : vertices) {
           this->stream << "v " << v.getX() << ' ' << v.getY() << ' ' << v.getZ() << std::endl;
           this->vertIndex++;
         }
 
-        for (auto f : faces) {
+        for (auto& f : faces) {
             this->stream << 'f';
-            for (auto vertIndex : vertices) {
+            for (auto& vertIndex : f) {
                 this->stream << ' ' << (vertIndex + startVertIndex);
             }
         }
