@@ -2,8 +2,6 @@
 #define _OBJEWRITER_HXX_
 
 #include <ostream>
-#include <vector>
-#include "vec3.hxx"
 
 using namespace std;
 
@@ -11,6 +9,7 @@ namespace osmwave {
     class ObjWriter {
         std::ostream& stream;
         int vertIndex;
+        int offset;
 
     public:
         ObjWriter(std::ostream& stream);
@@ -19,7 +18,12 @@ namespace osmwave {
 
         void material(const std::string& materialName);
 
-        int write(vector<Vec3<double>>& vertices, vector<vector<int>>& faces);
+        void checkpoint();
+
+        int vertex(double x, double y, double z);
+        void beginFace();
+        ObjWriter& operator << (int vertex);
+        void endFace();
     };
 }
 

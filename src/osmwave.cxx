@@ -20,7 +20,6 @@
 #include <osmium/handler.hpp>
 #include <osmium/visitor.hpp>
 #include <proj_api.h>
-#include "vec3.hxx"
 #include "ObjWriter.hxx"
 
 using namespace std;
@@ -35,35 +34,64 @@ class ObjHandler : public osmium::handler::Handler {
     projPJ proj;
     ObjWriter writer;
     vector<double> wayCoords;
-    vector<Vec3<double>> wayVerts;
 
 public:
     ObjHandler(projPJ p, ObjWriter writer) : proj(p), writer(writer) {}
 
     void way(osmium::Way& way) {
-        osmium::WayNodeList& nodes = way.nodes();
+        const osmium::TagList& tags = way.tags();
+        const char* building = tags.get_value_by_key("building");
+        const char* highway = tags.get_value_by_key("highway");
 
-        if (wayCoords.capacity() < nodes.size()) {
-            wayCoords.resize(nodes.size() * 2);
-            wayVerts.resize(nodes.size());
-            cout << "Resized buffers to " << nodes.size() << '\n';
+        if (!building /*&& !highway*/) {
+            return;
+        }
+
+        osmium::WayNodeList& nodes = way.nodes();
+        int nNodes = nodes.size();
+
+        if (wayCoords.capacity() < nNodes) {
+            wayCoords.reserve(nNodes * 3);
+            cerr << "Resized buffers to " << nodes.size() << '\n';
         }
 
         for (auto& nr : nodes) {
             wayCoords.push_back(nr.lon() * DEG_TO_RAD);
             wayCoords.push_back(nr.lat() * DEG_TO_RAD);
+            wayCoords.push_back(0);
         }
 
-        pj_transform(wgs84, proj, nodes.size(), 2, wayCoords.data(), wayCoords.data() + 1, nullptr);
-        for (vector<double>::iterator i = wayCoords.begin(); i != wayCoords.end(); i += 2) {
-            wayVerts.push_back(Vec3<double>(*i, *(i + 1), 0));
-        }
+        pj_transform(wgs84, proj, nodes.size(), 3, wayCoords.data(), wayCoords.data() + 1, nullptr);
 
-        vector<vector<int>> faces = vector<vector<int>>();
-        writer.write(wayVerts, faces);
+        footprintVolume(wayCoords);
 
         wayCoords.clear();
-        wayVerts.clear();
+    }
+
+private:
+
+    void footprintVolume(vector<double> wayCoords) {
+        int nVerts = wayCoords.size() / 3;
+        int vertexCount = 0;
+        writer.checkpoint();
+        for (vector<double>::iterator i = wayCoords.begin(); i != wayCoords.end(); i += 3) {
+            writer.vertex(*(i + 1), *(i + 2), *i);
+            writer.vertex(*(i + 1), *(i + 2) + 8, *i);
+
+            if (vertexCount) {
+                writer.beginFace();
+                writer << (vertexCount - 2) << (vertexCount) << (vertexCount + 1) << (vertexCount - 1);
+                writer.endFace();
+            }
+
+            vertexCount += 2;
+        }
+
+        writer.beginFace();
+        for (int i = 0; i < nVerts; i++) {
+            writer << (i * 2 + 1);
+        }
+        writer.endFace();
     }
 };
 
