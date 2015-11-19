@@ -21,6 +21,7 @@
 #include <osmium/visitor.hpp>
 #include <proj_api.h>
 #include "ObjWriter.hxx"
+#include "elevation.hxx"
 
 using namespace std;
 using namespace osmwave;
@@ -34,9 +35,10 @@ class ObjHandler : public osmium::handler::Handler {
     projPJ proj;
     ObjWriter writer;
     vector<double> wayCoords;
+    Elevation& elevation;
 
 public:
-    ObjHandler(projPJ p, ObjWriter writer) : proj(p), writer(writer) {}
+    ObjHandler(projPJ p, ObjWriter writer, Elevation& elevation) : proj(p), writer(writer), elevation(elevation) {}
 
     void way(osmium::Way& way) {
         const osmium::TagList& tags = way.tags();
@@ -56,9 +58,11 @@ public:
         }
 
         for (auto& nr : nodes) {
-            wayCoords.push_back(nr.lon() * DEG_TO_RAD);
-            wayCoords.push_back(nr.lat() * DEG_TO_RAD);
-            wayCoords.push_back(0);
+            double lon = nr.lon();
+            double lat = nr.lat();
+            wayCoords.push_back(lon * DEG_TO_RAD);
+            wayCoords.push_back(lat * DEG_TO_RAD);
+            wayCoords.push_back(elevation.elevation(lat, lon));
         }
 
         pj_transform(wgs84, proj, nodes.size(), 3, wayCoords.data(), wayCoords.data() + 1, nullptr);
@@ -69,7 +73,6 @@ public:
     }
 
 private:
-
     void footprintVolume(vector<double> wayCoords) {
         int nVerts = wayCoords.size() / 3;
         int vertexCount = 0;
@@ -108,8 +111,8 @@ projPJ get_proj(osmium::io::Header& header) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        cerr << "Usage: " << argv[0] << " OSM_FILE\n";
+    if (argc != 3) {
+        cerr << "Usage: " << argv[0] << " OSM_FILE ELEVATION_DATA_PATH\n";
         return 1;
     }
 
@@ -123,7 +126,9 @@ int main(int argc, char* argv[]) {
     location_handler_type location_handler(*index);
     location_handler.ignore_errors();
 
-    ObjHandler handler(proj, ObjWriter(cout));
+    string elevPath(argv[2]);
+    Elevation elevation(57, 11, 57, 12, elevPath);
+    ObjHandler handler(proj, ObjWriter(cout), elevation);
     osmium::apply(reader, location_handler, handler);
     reader.close();
 }
