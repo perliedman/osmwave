@@ -11,6 +11,9 @@
 #include <iostream>
 #include <memory>
 
+#include <osmium/area/assembler.hpp>
+#include <osmium/area/multipolygon_collector.hpp>
+
 #include <osmium/index/map/dummy.hpp>
 #include <osmium/index/map/sparse_mem_array.hpp>
 
@@ -40,8 +43,8 @@ class ObjHandler : public osmium::handler::Handler {
 public:
     ObjHandler(projPJ p, ObjWriter writer, Elevation& elevation) : proj(p), writer(writer), elevation(elevation) {}
 
-    void way(osmium::Way& way) {
-        const osmium::TagList& tags = way.tags();
+    void area(osmium::Area& area) {
+        const osmium::TagList& tags = area.tags();
         const char* building = tags.get_value_by_key("building");
         const char* highway = tags.get_value_by_key("highway");
 
@@ -49,7 +52,7 @@ public:
             return;
         }
 
-        osmium::WayNodeList& nodes = way.nodes();
+        const osmium::NodeRefList& nodes = *(area.cbegin<osmium::OuterRing>());
         int nNodes = nodes.size();
 
         if (wayCoords.capacity() < nNodes) {
@@ -117,8 +120,17 @@ int main(int argc, char* argv[]) {
     }
 
     string input_filename(argv[1]);
-    osmium::io::Reader reader(input_filename, osmium::osm_entity_bits::node | osmium::osm_entity_bits::way);
-    osmium::io::Header header = reader.header();
+
+    osmium::io::File infile(input_filename);
+    osmium::area::Assembler::config_type assembler_config;
+    osmium::area::MultipolygonCollector<osmium::area::Assembler> collector(assembler_config);
+
+    osmium::io::Reader reader1(infile, osmium::osm_entity_bits::relation);
+    collector.read_relations(reader1);
+    reader1.close();
+
+    osmium::io::Reader reader2(input_filename);
+    osmium::io::Header header = reader2.header();
     projPJ proj = get_proj(header);
 
     const auto& map_factory = osmium::index::MapFactory<osmium::unsigned_object_id_type, osmium::Location>::instance();
@@ -129,7 +141,9 @@ int main(int argc, char* argv[]) {
     string elevPath(argv[2]);
     Elevation elevation(57, 11, 57, 12, elevPath);
     ObjHandler handler(proj, ObjWriter(cout), elevation);
-    osmium::apply(reader, location_handler, handler);
-    reader.close();
+    osmium::apply(reader2, location_handler, collector.handler([&handler](osmium::memory::Buffer&& buffer) {
+        osmium::apply(buffer, handler);
+    }));
+    reader2.close();
 }
 
