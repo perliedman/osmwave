@@ -8,7 +8,7 @@
 using namespace std;
 
 namespace osmwave {
-    Elevation::Elevation(int south, int west, int north, int east, string& tilesPath) : 
+    Elevation::Elevation(int south, int west, int north, int east, const string& tilesPath) : 
     south(south), west(west), north(north), east(east), cols(east - west + 1), tileSize(0) {
         tiles = new uint8_t*[(north - south + 1) * cols];
 

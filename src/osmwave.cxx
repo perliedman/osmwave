@@ -10,6 +10,9 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <algorithm>
+#include <boost/regex.hpp>
+#include <boost/program_options.hpp>
 
 #include <osmium/area/assembler.hpp>
 #include <osmium/area/multipolygon_collector.hpp>
@@ -23,10 +26,12 @@
 #include <osmium/handler.hpp>
 #include <osmium/visitor.hpp>
 #include <proj_api.h>
+//#include "earcut.hxx"
 #include "ObjWriter.hxx"
 #include "elevation.hxx"
 
 using namespace std;
+using namespace boost;
 using namespace osmwave;
 
 typedef osmium::index::map::Map<osmium::unsigned_object_id_type, osmium::Location> index_type;
@@ -39,9 +44,11 @@ class ObjHandler : public osmium::handler::Handler {
     ObjWriter writer;
     vector<double> wayCoords;
     Elevation& elevation;
+    double defaultBuildingHeight;
 
 public:
-    ObjHandler(projPJ p, ObjWriter writer, Elevation& elevation) : proj(p), writer(writer), elevation(elevation) {}
+    ObjHandler(projPJ p, ObjWriter writer, Elevation& elevation, double defaultBuildingHeight = 8) : 
+        proj(p), writer(writer), elevation(elevation), defaultBuildingHeight(defaultBuildingHeight) {}
 
     void area(osmium::Area& area) {
         const osmium::TagList& tags = area.tags();
@@ -52,37 +59,43 @@ public:
             return;
         }
 
-        const osmium::NodeRefList& nodes = *(area.cbegin<osmium::OuterRing>());
-        int nNodes = nodes.size();
+        double height = getBuildingHeight(tags);
 
-        if (wayCoords.capacity() < nNodes) {
-            wayCoords.reserve(nNodes * 3);
-            cerr << "Resized buffers to " << nodes.size() << '\n';
+        for (auto oit = area.cbegin<osmium::OuterRing>(); oit != area.cend<osmium::OuterRing>(); ++oit) {
+            const osmium::NodeRefList& nodes = *oit;
+            int nNodes = nodes.size();
+
+            if (wayCoords.capacity() < nNodes) {
+                wayCoords.reserve(nNodes * 2);
+                cerr << "Resized buffers to " << nodes.size() << '\n';
+            }
+
+            double minElevation = numeric_limits<double>::max();
+            for (auto& nr : nodes) {
+                double lon = nr.lon();
+                double lat = nr.lat();
+                wayCoords.push_back(lon * DEG_TO_RAD);
+                wayCoords.push_back(lat * DEG_TO_RAD);
+                minElevation = min(minElevation, elevation.elevation(lat, lon));
+            }
+
+            pj_transform(wgs84, proj, nodes.size(), 2, wayCoords.data(), wayCoords.data() + 1, nullptr);
+
+            ringWalls(wayCoords, minElevation, height);
+            flatRoof(nNodes);
+
+            wayCoords.clear();
         }
-
-        for (auto& nr : nodes) {
-            double lon = nr.lon();
-            double lat = nr.lat();
-            wayCoords.push_back(lon * DEG_TO_RAD);
-            wayCoords.push_back(lat * DEG_TO_RAD);
-            wayCoords.push_back(elevation.elevation(lat, lon));
-        }
-
-        pj_transform(wgs84, proj, nodes.size(), 3, wayCoords.data(), wayCoords.data() + 1, nullptr);
-
-        footprintVolume(wayCoords);
-
-        wayCoords.clear();
     }
 
 private:
-    void footprintVolume(vector<double> wayCoords) {
-        int nVerts = wayCoords.size() / 3;
+    void ringWalls(vector<double> wayCoords, double elevation, double height) {
+        int nVerts = wayCoords.size() / 2;
         int vertexCount = 0;
         writer.checkpoint();
-        for (vector<double>::iterator i = wayCoords.begin(); i != wayCoords.end(); i += 3) {
-            writer.vertex(*(i + 1), *(i + 2), *i);
-            writer.vertex(*(i + 1), *(i + 2) + 8, *i);
+        for (vector<double>::iterator i = wayCoords.begin(); i != wayCoords.end(); i += 2) {
+            writer.vertex(*(i + 1), elevation, *i);
+            writer.vertex(*(i + 1), elevation + height, *i);
 
             if (vertexCount) {
                 writer.beginFace();
@@ -92,12 +105,34 @@ private:
 
             vertexCount += 2;
         }
+    }
 
+    void flatRoof(int nVerts) {
         writer.beginFace();
         for (int i = 0; i < nVerts; i++) {
             writer << (i * 2 + 1);
         }
         writer.endFace();
+    }
+
+    double getBuildingHeight(const osmium::TagList& tags) {
+        regex heightexpr("^\\s*([0-9\\.]+)\\s*(\\S*)\\s*$");
+        const char* heightTag = tags["height"];
+        double height = defaultBuildingHeight;
+
+        if (heightTag) {
+            string heightStr(heightTag);
+            auto match_begin = 
+                sregex_iterator(heightStr.begin(), heightStr.end(), heightexpr);
+            auto match_end = sregex_iterator();
+
+            if (match_begin != match_end) {
+                smatch match = *match_begin;
+                height = stod(match[1]);
+            }
+        }
+
+        return height;
     }
 };
 
@@ -114,12 +149,30 @@ projPJ get_proj(osmium::io::Header& header) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        cerr << "Usage: " << argv[0] << " OSM_FILE ELEVATION_DATA_PATH\n";
+    namespace po = boost::program_options;
+    po::options_description desc("Options");
+    desc.add_options()
+        ("elevation_dir,e", po::value<string>()->required(), "Set directory containing elevation data")
+        ("proj,p", po::value<string>(), "Projection definition")
+        ("osm_file", po::value<string>()->required(), "Input OSM data file");
+    po::positional_options_description positionOptions;
+    positionOptions.add("osm_file", 1);
+
+    po::variables_map vm;
+    try {
+        po::store(po::command_line_parser(argc, argv)
+            .options(desc)
+            .positional(positionOptions)
+            .run(), vm);
+
+        po::notify(vm);
+    } catch (po::error& e) {
+        cerr << "Error " << e.what() << endl << endl;
+        cerr << desc << endl;
         return 1;
     }
 
-    string input_filename(argv[1]);
+    const string& input_filename = vm["osm_file"].as<string>();
 
     osmium::io::File infile(input_filename);
     osmium::area::Assembler::config_type assembler_config;
@@ -131,19 +184,27 @@ int main(int argc, char* argv[]) {
 
     osmium::io::Reader reader2(input_filename);
     osmium::io::Header header = reader2.header();
-    projPJ proj = get_proj(header);
+    projPJ proj;
+
+    if (vm.count("proj")) {
+        proj = pj_init_plus(vm["proj"].as<string>().c_str());
+    } else {
+        proj = get_proj(header);
+    }
 
     const auto& map_factory = osmium::index::MapFactory<osmium::unsigned_object_id_type, osmium::Location>::instance();
     unique_ptr<index_type> index = map_factory.create_map("sparse_mem_array");
     location_handler_type location_handler(*index);
     location_handler.ignore_errors();
 
-    string elevPath(argv[2]);
+    const string& elevPath(vm["elevation_dir"].as<string>());
     Elevation elevation(57, 11, 57, 12, elevPath);
     ObjHandler handler(proj, ObjWriter(cout), elevation);
     osmium::apply(reader2, location_handler, collector.handler([&handler](osmium::memory::Buffer&& buffer) {
         osmium::apply(buffer, handler);
     }));
     reader2.close();
+
+    return 0;
 }
 

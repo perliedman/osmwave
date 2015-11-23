@@ -16,7 +16,7 @@ namespace osmwave {
         uint8_t** tiles;
 
     public:
-        Elevation(int south, int west, int north, int east, string& tilesPath);
+        Elevation(int south, int west, int north, int east, const string& tilesPath);
         ~Elevation();
 
         double elevation(double lat, double lon);
