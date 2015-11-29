@@ -12,7 +12,6 @@
 #include <memory>
 #include <algorithm>
 #include <boost/regex.hpp>
-#include <boost/program_options.hpp>
 
 #include <osmium/area/assembler.hpp>
 #include <osmium/area/multipolygon_collector.hpp>
@@ -148,63 +147,37 @@ projPJ get_proj(osmium::io::Header& header) {
     return pj_init_plus(projDef.c_str());
 }
 
-int main(int argc, char* argv[]) {
-    namespace po = boost::program_options;
-    po::options_description desc("Options");
-    desc.add_options()
-        ("elevation_dir,e", po::value<string>()->required(), "Set directory containing elevation data")
-        ("proj,p", po::value<string>(), "Projection definition")
-        ("osm_file", po::value<string>()->required(), "Input OSM data file");
-    po::positional_options_description positionOptions;
-    positionOptions.add("osm_file", 1);
+namespace osmwave {
+    void osm_to_obj(const std::string& osmFile, const std::string& elevationPath, const std::string* projDef) {
+        osmium::io::File infile(osmFile);
+        osmium::area::Assembler::config_type assembler_config;
+        osmium::area::MultipolygonCollector<osmium::area::Assembler> collector(assembler_config);
 
-    po::variables_map vm;
-    try {
-        po::store(po::command_line_parser(argc, argv)
-            .options(desc)
-            .positional(positionOptions)
-            .run(), vm);
+        osmium::io::Reader reader1(infile, osmium::osm_entity_bits::relation);
+        collector.read_relations(reader1);
+        reader1.close();
 
-        po::notify(vm);
-    } catch (po::error& e) {
-        cerr << "Error " << e.what() << endl << endl;
-        cerr << desc << endl;
-        return 1;
+        osmium::io::Reader reader2(osmFile);
+        osmium::io::Header header = reader2.header();
+        projPJ proj;
+
+        if (projDef) {
+            proj = pj_init_plus(projDef->c_str());
+        } else {
+            proj = get_proj(header);
+        }
+
+        const auto& map_factory = osmium::index::MapFactory<osmium::unsigned_object_id_type, osmium::Location>::instance();
+        unique_ptr<index_type> index = map_factory.create_map("sparse_mem_array");
+        location_handler_type location_handler(*index);
+        location_handler.ignore_errors();
+
+        Elevation elevation(57, 11, 57, 12, elevationPath);
+        ObjHandler handler(proj, ObjWriter(cout), elevation);
+        osmium::apply(reader2, location_handler, collector.handler([&handler](osmium::memory::Buffer&& buffer) {
+            osmium::apply(buffer, handler);
+        }));
+        reader2.close();
     }
-
-    const string& input_filename = vm["osm_file"].as<string>();
-
-    osmium::io::File infile(input_filename);
-    osmium::area::Assembler::config_type assembler_config;
-    osmium::area::MultipolygonCollector<osmium::area::Assembler> collector(assembler_config);
-
-    osmium::io::Reader reader1(infile, osmium::osm_entity_bits::relation);
-    collector.read_relations(reader1);
-    reader1.close();
-
-    osmium::io::Reader reader2(input_filename);
-    osmium::io::Header header = reader2.header();
-    projPJ proj;
-
-    if (vm.count("proj")) {
-        proj = pj_init_plus(vm["proj"].as<string>().c_str());
-    } else {
-        proj = get_proj(header);
-    }
-
-    const auto& map_factory = osmium::index::MapFactory<osmium::unsigned_object_id_type, osmium::Location>::instance();
-    unique_ptr<index_type> index = map_factory.create_map("sparse_mem_array");
-    location_handler_type location_handler(*index);
-    location_handler.ignore_errors();
-
-    const string& elevPath(vm["elevation_dir"].as<string>());
-    Elevation elevation(57, 11, 57, 12, elevPath);
-    ObjHandler handler(proj, ObjWriter(cout), elevation);
-    osmium::apply(reader2, location_handler, collector.handler([&handler](osmium::memory::Buffer&& buffer) {
-        osmium::apply(buffer, handler);
-    }));
-    reader2.close();
-
-    return 0;
 }
 
