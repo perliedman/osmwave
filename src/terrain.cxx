@@ -105,16 +105,18 @@ void terrain_to_obj(const std::string& elevationPath, const std::string& projDef
     // which is a requirement for the triangulation algorithm,
     // as long as projection is west to east.
     for (int c = 0; c < cols; c++) {
-        double x = (bounds[2] - bounds[0]) * c / cols;
+        double x = bounds[0] + (bounds[2] - bounds[0]) * c / cols;
         for (int r = 0; r < rows; r++) {
-            double y = (bounds[3] - bounds[1]) * r / rows;
+            double y = bounds[1] + (bounds[3] - bounds[1]) * r / rows;
             double ll[2] = {x, y};
             pj_transform(proj, wgs84, 1, 2, (double*)&ll, (double*)&ll + 1, nullptr);
 
-            XYZ *coord = &coords[i++];
-            coord->x = x;
-            coord->y = y;
-            coord->z = elevation.elevation(ll[1]*RAD_TO_DEG, ll[0]*RAD_TO_DEG);
+            XYZ& coord = coords[i++];
+            coord.x = x;
+            coord.y = y;
+            coord.z = elevation.elevation(ll[1]*RAD_TO_DEG, ll[0]*RAD_TO_DEG);
+
+            //cerr << (ll[0] * RAD_TO_DEG) << ", " << (ll[1] * RAD_TO_DEG) << " (" << coord.x << ", " << coord.y << "): " << coord.z << endl;
         }
     }
 

@@ -13,7 +13,7 @@ namespace osmwave {
         int east;
         int cols;
         int tileSize;
-        uint8_t** tiles;
+        int8_t** tiles;
 
     public:
         Elevation(int south, int west, int north, int east, const string& tilesPath);
@@ -22,7 +22,7 @@ namespace osmwave {
         double elevation(double lat, double lon);
 
     private:
-        double getTileValue(uint8_t* tile, int index);
+        double getTileValue(int8_t* tile, int index);
     };
 }
 

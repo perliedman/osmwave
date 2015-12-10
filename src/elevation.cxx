@@ -10,7 +10,7 @@ using namespace std;
 namespace osmwave {
     Elevation::Elevation(int south, int west, int north, int east, const string& tilesPath) : 
     south(south), west(west), north(north), east(east), cols(east - west + 1), tileSize(0) {
-        tiles = new uint8_t*[(north - south + 1) * cols];
+        tiles = new int8_t*[(north - south + 1) * cols];
 
         int i = 0;
         for (int lat = south; lat <= north; lat++) {
@@ -42,7 +42,7 @@ namespace osmwave {
                         tileSize = currTileSize;
                     }
 
-                    tiles[i] = new uint8_t[size];
+                    tiles[i] = new int8_t[size];
                     file.seekg(0, ios::beg);
                     file.read((char*)tiles[i], size);
 
@@ -72,7 +72,7 @@ namespace osmwave {
         delete tiles;
     }
 
-    double Elevation::getTileValue(uint8_t* tile, int index) {
+    double Elevation::getTileValue(int8_t* tile, int index) {
         return tile[index] << 8 | tile[index + 1];
     }
 
@@ -81,7 +81,7 @@ namespace osmwave {
         double fLon = floor(lon);
         int tileRow = (int)fLat - south;
         int tileCol = (int)fLon - west;
-        uint8_t* tile = tiles[tileRow * cols + tileCol];
+        int8_t* tile = tiles[tileRow * cols + tileCol];
 
         double row = (lat - fLat) * tileSize;
         double col = (lon - fLon) * tileSize;
@@ -98,11 +98,14 @@ namespace osmwave {
         double v1 = v00 + (v10 - v00) * colFrac;
         double v2 = v01 + (v11 - v01) * colFrac;
 
-/*
-        cerr << "lat=" << lat << ", lon=" << lon << ", tileRow=" << tileRow <<
-            ", tileCol=" << tileCol << ", row=" << row << ", col=" << col << 
-            ", near=" << v00 << ", output=" << (v1 + (v2 - v1) * rowFrac) << '\n';
-*/
-        return v1 + (v2 - v1) * rowFrac;
+        double result = v1 + (v2 - v1) * rowFrac;
+
+        //cerr << "lat=" << lat << ", lon=" << lon << ", tileRow=" << tileRow <<
+        //    ", tileCol=" << tileCol << ", row=" << row << ", col=" << col << 
+        //    ", index=" << index <<
+        //    ", v00=" << v00 << ", v10=" << v10 << ", v01=" << v01 << ", v11=" << v11 << ", output=" << result << '\n';
+        //cerr << (int)tile[index] << ":" << (int)tile[index + 1] << endl;
+
+        return result;
     }
 }
