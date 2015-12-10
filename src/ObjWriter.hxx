@@ -21,6 +21,7 @@ namespace osmwave {
         void checkpoint();
 
         int vertex(double x, double y, double z);
+        int vertex(double x, double y, double z, double nx, double ny, double nz);
         void beginFace();
         ObjWriter& operator << (int vertex);
         void endFace();

@@ -24,6 +24,11 @@ namespace osmwave {
         vertIndex++;
     }
 
+    int ObjWriter::vertex(double x, double y, double z, double nx, double ny, double nz) {
+        vertex(x, y, z);
+        stream << "vn " << nx << ' ' << ny << ' ' << nz << std::endl;
+    }
+
     void ObjWriter::beginFace() {
         stream << "f ";
     }

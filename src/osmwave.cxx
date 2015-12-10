@@ -66,7 +66,6 @@ public:
 
             if (wayCoords.capacity() < nNodes) {
                 wayCoords.reserve(nNodes * 2);
-                cerr << "Resized buffers to " << nodes.size() << '\n';
             }
 
             double minElevation = numeric_limits<double>::max();
@@ -135,16 +134,14 @@ private:
     }
 };
 
-projPJ get_proj(osmium::io::Header& header) {
+string* get_proj(osmium::io::Header& header) {
     auto& box = header.boxes()[0];
     float clat = (box.bottom_left().lat() + box.top_right().lat()) / 2;
     float clon = (box.bottom_left().lon() + box.top_right().lon()) / 2;
 
     ostringstream stream;
     stream << "+proj=tmerc +lat_0=" << clat << " +lon_0=" << clon << " +k=1.000000 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs";
-    string projDef = stream.str();
-
-    return pj_init_plus(projDef.c_str());
+    return new string(stream.str());
 }
 
 namespace osmwave {
@@ -161,10 +158,19 @@ namespace osmwave {
         osmium::io::Header header = reader2.header();
         projPJ proj;
 
-        if (projDef) {
+        auto& box = header.boxes()[0];
+        auto& sw = box.bottom_left();
+        auto& ne = box.top_right();
+        cerr << "Bounds: (" << sw.lat() << ", " << sw.lon() << ")-(" << ne.lat() << ", " << ne.lon() << ")\n";
+        float clat = (box.bottom_left().lat() + box.top_right().lat()) / 2;
+        float clon = (box.bottom_left().lon() + box.top_right().lon()) / 2;
+        if (!projDef) {
+            projDef = get_proj(header);
             proj = pj_init_plus(projDef->c_str());
+            cerr << "Projection: " << (*projDef) << endl;
+            delete projDef;
         } else {
-            proj = get_proj(header);
+            proj = pj_init_plus(projDef->c_str());
         }
 
         const auto& map_factory = osmium::index::MapFactory<osmium::unsigned_object_id_type, osmium::Location>::instance();

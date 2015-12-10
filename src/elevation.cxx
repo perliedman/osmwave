@@ -93,8 +93,8 @@ namespace osmwave {
         double colFrac = col - colI;
         double v00 = getTileValue(tile, index);
         double v10 = getTileValue(tile, index + 2);
-        double v11 = getTileValue(tile, index + tileSize*2 + 2);
-        double v01 = getTileValue(tile, index + tileSize*2);
+        double v11 = getTileValue(tile, index - tileSize*2 + 2);
+        double v01 = getTileValue(tile, index - tileSize*2);
         double v1 = v00 + (v10 - v00) * colFrac;
         double v2 = v01 + (v11 - v01) * colFrac;
 
