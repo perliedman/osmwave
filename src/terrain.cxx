@@ -42,6 +42,46 @@ static void triangleNormal(const XYZ* coords, const ITRIANGLE& tri, XYZ& normal)
     normal.z = normal.z / l;
 }
 
+static double findNearHeight(int rows, int cols, int index, int dx, int dy, XYZ* verts) {
+    int s = index;
+    do {
+        s += dx * rows + dy;
+    } while (std::isnan(verts[s].z));
+
+    return verts[s].z;
+}
+
+static int thin(int rows, int cols, XYZ* verts, double tolerance) {
+    int index = 0;
+    int nonEmpty = 0;
+
+    for (int i = 1; i < cols - 1; i++) {
+        for (int j = 1; j < rows - 1; j++) {
+            if (!std::isnan(verts[index].z)) {
+                double e1 = verts[index].z;
+                double e2 = findNearHeight(rows, cols, index, 1, -1, verts);
+                double e3 = findNearHeight(rows, cols, index, 1, 0, verts);
+                double e4 = findNearHeight(rows, cols, index, 1, 1, verts);
+                double d2 = abs(e1 - e2);
+                double d3 = abs(e1 - e3);
+                double d4 = abs(e1 - e4);
+
+                if (d2 <= tolerance &&
+                    d3 <= tolerance &&
+                    d4 <= tolerance) {
+                    verts[index].z = NAN;
+                } else {
+                    nonEmpty++;
+                }
+            }
+
+            index++;
+        }
+    }
+
+    return nonEmpty;
+}
+
 void terrain_to_obj(const std::string& elevationPath, const std::string& projDef, double x1, double y1, double x2, double y2) {
     Elevation elevation(floor(y1), floor(x1), ceil(y2), ceil(x2), elevationPath);
     ObjWriter writer(cout);
@@ -78,13 +118,30 @@ void terrain_to_obj(const std::string& elevationPath, const std::string& projDef
         }
     }
 
+    cerr << "Thinning..." << endl;
+    int startCount = rows * cols,
+        lastCount = 0,
+        count = -1;
+    while (lastCount != count) {
+        lastCount = count;
+        count = thin(rows, cols, coords, 2);
+    }
+
+    int j = 0;
+    for (int i = 0; i < rows * cols; i++) {
+        if (!std::isnan(coords[i].z)) {
+            coords[j++] = coords[i];
+        }
+    }
+    cerr << "Thinned to " << j << " vertices" << endl;
+
     cerr << "Triangulating..." << endl;
     ITRIANGLE *tris = new ITRIANGLE[3 * rows * cols];
     int numTriangles;
-    Triangulate(rows * cols, coords, tris, numTriangles);
+    Triangulate(j, coords, tris, numTriangles);
     cerr << numTriangles << " triangles" << endl;
 
-    memset((void*)normals, 0, sizeof(XYZ) * rows * cols);
+    memset((void*)normals, 0, sizeof(XYZ) * j);
     for (int i = 0; i < numTriangles; i++) {
         XYZ normal;
         triangleNormal(coords, tris[i], normal);
@@ -94,7 +151,7 @@ void terrain_to_obj(const std::string& elevationPath, const std::string& projDef
     }
 
     writer.checkpoint();
-    for (int i = 0; i < rows * cols; i++) {
+    for (int i = 0; i < j; i++) {
         writer.vertex(coords[i].x, coords[i].z, coords[i].y, normals[i].x, normals[i].y, normals[i].z);
     }
 
