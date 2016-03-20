@@ -120,10 +120,10 @@ void terrain_to_obj(const std::string& elevationPath, const std::string& projDef
         }
     }
 
-    cerr << "Thinning..." << endl;
     int startCount = rows * cols,
         lastCount = 0,
         count = -1;
+    cerr << "Thinning " << startCount << " vertices..." << endl;
     while (lastCount != count) {
         lastCount = count;
         count = thin(rows, cols, coords, 2);
@@ -154,7 +154,7 @@ void terrain_to_obj(const std::string& elevationPath, const std::string& projDef
 
     writer.checkpoint();
     for (int i = 0; i < j; i++) {
-        writer.vertex(coords[i].x, coords[i].z, coords[i].y, normals[i].x, normals[i].y, normals[i].z);
+        writer.vertex(coords[i].y, coords[i].z, coords[i].x, normals[i].y, normals[i].z, normals[i].x);
     }
 
     for (int i = 0; i < numTriangles; i++) {
