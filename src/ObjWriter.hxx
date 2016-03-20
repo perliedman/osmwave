@@ -14,6 +14,8 @@ namespace osmwave {
     public:
         ObjWriter(std::ostream& stream);
 
+        void comment(const std::string& comment);
+
         void materialLibrary(const std::string& path);
 
         void material(const std::string& materialName);

@@ -7,6 +7,10 @@ namespace osmwave {
     ObjWriter::ObjWriter(std::ostream& stream) : stream(stream), vertIndex(1), offset(0) {
     }
 
+    void ObjWriter::comment(const std::string& comment) {
+        stream << "# " << comment << std::endl;
+    }
+
     void ObjWriter::materialLibrary(const std::string& path) {
         stream << "mtllib" << path << std::endl;
     }

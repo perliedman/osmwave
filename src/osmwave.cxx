@@ -145,7 +145,47 @@ string* get_proj(osmium::io::Header& header) {
 }
 
 namespace osmwave {
+    void write_obj_header(ObjWriter& objWriter, const string& osmFile, const osmium::Location& sw, const osmium::Location& ne, projPJ proj) {
+        ostringstream c;
+        c.precision(7);
+
+        objWriter.comment("Created with OSMWAVE");
+        objWriter.comment("");
+
+        c << "Input file: " << osmFile;
+        objWriter.comment(c.str());
+        cerr << c.str() << endl;
+
+        c.str("");
+        c << "Lat/lng bounds: (" << sw.lat() << ", " << sw.lon() << ") - (" << ne.lat() << ", " << ne.lon() << ")";
+        objWriter.comment(c.str());
+        cerr << c.str() << endl;
+
+        c.str("");
+        c << "Projection: " << pj_get_def(proj, 0);
+        objWriter.comment(c.str());
+        cerr << c.str() << endl;
+
+        double coord[2];
+        c.str("");
+        c << "Projected bounds: (";
+        coord[0] = sw.lon() * DEG_TO_RAD;
+        coord[1] = sw.lat() * DEG_TO_RAD;
+        pj_transform(wgs84, proj, 1, 2, coord, coord + 1, nullptr);
+        c << coord[0] << ", " << coord[1];
+        c << ") - (";
+        coord[0] = ne.lon() * DEG_TO_RAD;
+        coord[1] = ne.lat() * DEG_TO_RAD;
+        pj_transform(wgs84, proj, 1, 2, coord, coord + 1, nullptr);
+        c << coord[0] << ", " << coord[1];
+        c << ")";
+        objWriter.comment(c.str());
+        cerr << c.str() << endl;
+    }
+
     void osm_to_obj(const std::string& osmFile, const std::string& elevationPath, const std::string* projDef) {
+        ObjWriter objWriter(cout);
+
         osmium::io::File infile(osmFile);
         osmium::area::Assembler::config_type assembler_config;
         osmium::area::MultipolygonCollector<osmium::area::Assembler> collector(assembler_config);
@@ -161,17 +201,17 @@ namespace osmwave {
         auto& box = header.boxes()[0];
         auto& sw = box.bottom_left();
         auto& ne = box.top_right();
-        cerr << "Bounds: (" << sw.lat() << ", " << sw.lon() << ")-(" << ne.lat() << ", " << ne.lon() << ")\n";
         float clat = (box.bottom_left().lat() + box.top_right().lat()) / 2;
         float clon = (box.bottom_left().lon() + box.top_right().lon()) / 2;
         if (!projDef) {
             projDef = get_proj(header);
             proj = pj_init_plus(projDef->c_str());
-            cerr << "Projection: " << (*projDef) << endl;
             delete projDef;
         } else {
             proj = pj_init_plus(projDef->c_str());
         }
+
+        write_obj_header(objWriter, osmFile, sw, ne, proj);
 
         const auto& map_factory = osmium::index::MapFactory<osmium::unsigned_object_id_type, osmium::Location>::instance();
         unique_ptr<index_type> index = map_factory.create_map("sparse_mem_array");
@@ -179,7 +219,7 @@ namespace osmwave {
         location_handler.ignore_errors();
 
         Elevation elevation(57, 11, 57, 12, elevationPath);
-        ObjHandler handler(proj, ObjWriter(cout), elevation);
+        ObjHandler handler(proj, objWriter, elevation);
         osmium::apply(reader2, location_handler, collector.handler([&handler](osmium::memory::Buffer&& buffer) {
             osmium::apply(buffer, handler);
         }));
