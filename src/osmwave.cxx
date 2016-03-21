@@ -1,12 +1,3 @@
-/*
-
-  This is a small tool that counts the number of nodes, ways, and relations in
-  the input file.
-
-  The code in this example file is released into the Public Domain.
-
-*/
-
 #include <cstdint>
 #include <iostream>
 #include <memory>
