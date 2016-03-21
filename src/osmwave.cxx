@@ -37,6 +37,7 @@ typedef osmium::index::map::Map<osmium::unsigned_object_id_type, osmium::Locatio
 typedef osmium::handler::NodeLocationsForWays<index_type> location_handler_type;
 
 projPJ wgs84 = pj_init_plus("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs");
+const double METERS_PER_LEVEL = 3.0;
 
 class ObjHandler : public osmium::handler::Handler {
     projPJ proj;
@@ -127,6 +128,17 @@ private:
             if (match_begin != match_end) {
                 smatch match = *match_begin;
                 height = stod(match[1]);
+            }
+        } else {
+            const char* levelsTag = tags["building:levels"];
+            if (levelsTag) {
+                string levelsStr(levelsTag);
+                try {
+                    double levels = stod(levelsStr);
+                    height = levels * METERS_PER_LEVEL;
+                } catch (const invalid_argument& ia) {
+                    cerr << "Unparseable value for \"building:levels\" tag: \"" << levelsStr << "\"" << endl; 
+                }
             }
         }
 
