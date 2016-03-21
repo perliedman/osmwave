@@ -3,7 +3,7 @@ OSM Wave
 
 Convert OpenStreetMap buildings and roads into Wavefront OBJ 3D models.
 
-![gbg-2016-03-21 00 36 02](https://cloud.githubusercontent.com/assets/1246614/13908163/9036b17c-eefd-11e5-8384-e76a1a91e631.png)
+![hildedal-south-20160321](https://cloud.githubusercontent.com/assets/1246614/13912511/05fb6ad4-ef3e-11e5-8dd6-d2211af36297.png)
 
 
 ## Dependencies
