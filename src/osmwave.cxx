@@ -59,7 +59,8 @@ public:
             return;
         }
 
-        double height = getBuildingHeight(tags);
+        double height = getBuildingHeight(tags, defaultBuildingHeight, "height", "building:levels");
+        double baseHeight = getBuildingHeight(tags, 0, "min_height", "building:min_level");
 
         for (auto oit = area.cbegin<osmium::OuterRing>(); oit != area.cend<osmium::OuterRing>(); ++oit) {
             const osmium::NodeRefList& nodes = *oit;
@@ -80,7 +81,7 @@ public:
 
             pj_transform(wgs84, proj, nodes.size(), 2, wayCoords.data(), wayCoords.data() + 1, nullptr);
 
-            ringWalls(wayCoords, minElevation, height);
+            ringWalls(wayCoords, minElevation + baseHeight, height - baseHeight);
             flatRoof(nNodes);
 
             wayCoords.clear();
@@ -114,10 +115,10 @@ private:
         writer.endFace();
     }
 
-    double getBuildingHeight(const osmium::TagList& tags) {
+    double getBuildingHeight(const osmium::TagList& tags, double defaultHeight, const char* heightTagName, const char* levelTagName) {
         regex heightexpr("^\\s*([0-9\\.]+)\\s*(\\S*)\\s*$");
-        const char* heightTag = tags["height"];
-        double height = defaultBuildingHeight;
+        const char* heightTag = tags[heightTagName];
+        double height = defaultHeight;
 
         if (heightTag) {
             string heightStr(heightTag);
@@ -130,7 +131,7 @@ private:
                 height = stod(match[1]);
             }
         } else {
-            const char* levelsTag = tags["building:levels"];
+            const char* levelsTag = tags[levelTagName];
             if (levelsTag) {
                 string levelsStr(levelsTag);
                 try {
