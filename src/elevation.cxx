@@ -83,8 +83,8 @@ namespace osmwave {
         int tileCol = (int)fLon - west;
         int8_t* tile = tiles[tileRow * cols + tileCol];
 
-        double row = (lat - fLat) * tileSize;
-        double col = (lon - fLon) * tileSize;
+        double row = (lat - fLat) * (tileSize - 1);
+        double col = (lon - fLon) * (tileSize - 1);
 
         int rowI = floor(row);
         int colI = floor(col);
