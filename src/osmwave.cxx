@@ -44,9 +44,10 @@ public:
     void area(osmium::Area& area) {
         const osmium::TagList& tags = area.tags();
         const char* building = tags.get_value_by_key("building");
+        const char* buildingPart = tags.get_value_by_key("building:part");
         const char* highway = tags.get_value_by_key("highway");
 
-        if (!building /*&& !highway*/) {
+        if (!building && !buildingPart /*&& !highway*/) {
             return;
         }
 
