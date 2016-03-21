@@ -218,7 +218,7 @@ namespace osmwave {
         location_handler_type location_handler(*index);
         location_handler.ignore_errors();
 
-        Elevation elevation(57, 11, 57, 12, elevationPath);
+        Elevation elevation((int)floor(sw.lat()), (int)floor(sw.lon()), (int)floor(ne.lat()), (int)floor(ne.lon()), elevationPath);
         ObjHandler handler(proj, objWriter, elevation);
         osmium::apply(reader2, location_handler, collector.handler([&handler](osmium::memory::Buffer&& buffer) {
             osmium::apply(buffer, handler);
